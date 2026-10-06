@@ -123,6 +123,15 @@ export function Whiteboard() {
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   };
 
+  const eraseTextAt = (point: Pt) => {
+    const radius = Math.max(18, size * 3);
+    setTexts((items) => items.filter((item) => {
+      const width = Math.max(40, item.text.length * item.size * 0.58);
+      const height = item.size * 1.4;
+      return point.x + radius < item.x || point.x - radius > item.x + width || point.y + radius < item.y || point.y - radius > item.y + height;
+    }));
+  };
+
   const onDown = (e: React.PointerEvent) => {
     if (tool === "text") {
       const p = pos(e);
@@ -135,7 +144,9 @@ export function Whiteboard() {
     if (tool === "select") return;
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     if (timer.current) clearTimeout(timer.current);
-    drawing.current = { id: uid++, pts: [pos(e)], color: ink, size, erase: tool === "eraser" };
+    const point = pos(e);
+    drawing.current = { id: uid++, pts: [point], color: ink, size, erase: tool === "eraser" };
+    if (tool === "eraser") eraseTextAt(point);
     redraw();
   };
   const onMove = (e: React.PointerEvent) => {
@@ -145,6 +156,7 @@ export function Whiteboard() {
       const r = wrap.current!.getBoundingClientRect();
       evs.forEach((ev) => drawing.current!.pts.push({ x: ev.clientX - r.left, y: ev.clientY - r.top }));
     } else drawing.current.pts.push(pos(e));
+    if (tool === "eraser") eraseTextAt(pos(e));
     redraw();
   };
   const onUp = () => {
@@ -233,7 +245,10 @@ export function Whiteboard() {
               className={`h-6 w-6 rounded-full border border-border ${ink === c ? "ring-2 ring-primary ring-offset-2 ring-offset-card" : ""}`} style={{ background: c }} />
           ))}
         </div>
-        <input type="range" min={1} max={12} value={size} onChange={(e) => setSize(+e.target.value)} className="w-24 accent-[var(--primary)]" aria-label="Pen size" />
+        <input type="range" min={1} max={12} value={size} onChange={(e) => setSize(+e.target.value)} className="w-24 accent-[var(--primary)]" aria-label={tool === "eraser" ? "Rubber size" : "Pen size"} />
+        <Button type="button" variant={tool === "eraser" ? "default" : "outline"} size="sm" onClick={() => setTool("eraser")} aria-pressed={tool === "eraser"}>
+          <Eraser /> Rubber
+        </Button>
         <Button type="button" variant="outline" size="sm" onClick={addTextBox}><Type /> Add text box</Button>
         <div className="mx-2 h-6 w-px bg-border" />
         <span className="text-xs font-medium text-muted-foreground">Background</span>
@@ -273,7 +288,7 @@ export function Whiteboard() {
         {/* Left tools */}
         <aside className="z-30 flex w-14 flex-col items-center gap-1 border-r border-border bg-card py-3">
           {toolBtn("pen", Pen, "Pen")}
-          {toolBtn("eraser", Eraser, "Eraser")}
+          {toolBtn("eraser", Eraser, "Rubber — erase wrong areas")}
           {toolBtn("text", Type, "Text box")}
           {toolBtn("select", MousePointer2, "Move / edit text")}
           <div className="my-2 h-px w-8 bg-border" />
@@ -286,7 +301,7 @@ export function Whiteboard() {
           <canvas
             ref={canvas}
             className="absolute inset-0 h-full w-full touch-none"
-            style={{ cursor: tool === "text" ? "text" : tool === "select" ? "default" : "crosshair" }}
+            style={{ cursor: tool === "text" ? "text" : tool === "select" ? "default" : tool === "eraser" ? "cell" : "crosshair" }}
             onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
           />
           {texts.map((t) => (
