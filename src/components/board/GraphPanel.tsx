@@ -26,11 +26,11 @@ export function GraphPanel() {
     ctx.strokeStyle = "#111"; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(sx(0), 0); ctx.lineTo(sx(0), H); ctx.moveTo(0, sy(0)); ctx.lineTo(W, sy(0)); ctx.stroke();
     items.forEach((raw, i) => {
-      const col = COLORS[i % COLORS.length];
+      const col = COLORS[i % COLORS.length]!;
       ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 2;
       const pt = raw.match(/^\s*\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\)\s*$/);
       if (pt) {
-        const x = +pt[1], y = +pt[2];
+        const x = Number(pt[1]), y = Number(pt[2]);
         ctx.beginPath(); ctx.arc(sx(x), sy(y), 4, 0, Math.PI * 2); ctx.fill();
         ctx.fillText(`(${x}, ${y})`, sx(x) + 6, sy(y) - 6);
         return;

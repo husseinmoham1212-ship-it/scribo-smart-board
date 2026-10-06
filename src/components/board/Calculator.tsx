@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { create, all } from "mathjs";
 
-const math = create(all, {});
+const math = create(all!, {});
 
 type Line = { expr: string; result: string; frac: boolean };
 
@@ -67,7 +67,7 @@ export function Calculator() {
     );
   };
 
-  type K = { l: string; s?: string; a: () => void; v?: "num" | "op" | "fn" | "2nd" | "enter" };
+  type K = { l: string; s?: string | undefined; a: () => void; v?: "num" | "op" | "fn" | "2nd" | "enter" | undefined };
   const K = (l: string, a: () => void, v: K["v"] = "fn", s?: string): K => ({ l, a, v, s });
 
   const keys: K[] = [
