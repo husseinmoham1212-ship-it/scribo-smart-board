@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Calculator as CalcIcon, Eraser, LineChart, MousePointer2, Pen, Sigma, Trash2, Type, Undo2, Wand2, Loader2 } from "lucide-react";
+import { Calculator as CalcIcon, ChevronLeft, ChevronRight, Clock3, Eraser, Flag, LineChart, Loader2, MousePointer2, Pause, Pen, Play, Sigma, Trash2, Type, Undo2, Wand2 } from "lucide-react";
 import { recognizeHandwriting } from "@/lib/recognize.functions";
+import { Button } from "@/components/ui/button";
 import { Panel } from "./Panel";
 import { Calculator } from "./Calculator";
 import { GraphPanel } from "./GraphPanel";
@@ -35,6 +36,9 @@ export function Whiteboard() {
   const [msg, setMsg] = useState<string | null>(null);
   const [question, setQuestion] = useState("");
   const [panels, setPanels] = useState({ calc: false, graph: false, formula: false });
+  const [review, setReview] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [timerRunning, setTimerRunning] = useState(true);
   const drawing = useRef<Stroke | null>(null);
   const pending = useRef<number[]>([]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -43,6 +47,11 @@ export function Whiteboard() {
   const dark = bg === "#1f3a2e" || bg === "#1e2430";
 
   useEffect(() => setInk(dark ? "#ffffff" : "#111827"), [dark]);
+  useEffect(() => {
+    if (!timerRunning) return;
+    const interval = window.setInterval(() => setElapsed((value) => value + 1), 1000);
+    return () => window.clearInterval(interval);
+  }, [timerRunning]);
 
   const redraw = useCallback(() => {
     const c = canvas.current, w = wrap.current;
@@ -154,6 +163,15 @@ export function Whiteboard() {
     setTexts((arr) => [...arr, { id: uid++, x: w.clientWidth / 2 - 150, y: 80 + (arr.length % 10) * 40, text: t, size: 24, color: ink }]);
   };
 
+  const addTextBox = () => {
+    const w = wrap.current;
+    if (!w) return;
+    const id = uid++;
+    focusId.current = id;
+    setTexts((items) => [...items, { id, x: Math.max(24, w.clientWidth / 2 - 140), y: Math.max(48, w.clientHeight / 3), text: "Type your work here", size: 24, color: ink }]);
+    setTool("select");
+  };
+
   const undo = () => {
     const lastS = strokes[strokes.length - 1]?.id ?? 0, lastT = texts[texts.length - 1]?.id ?? 0;
     if (lastS > lastT) setStrokes((s) => s.slice(0, -1)); else setTexts((t) => t.slice(0, -1));
@@ -174,15 +192,41 @@ export function Whiteboard() {
     ? { backgroundColor: "#ffffff", backgroundImage: "linear-gradient(#e5e7eb 1px, transparent 1px), linear-gradient(90deg, #e5e7eb 1px, transparent 1px)", backgroundSize: "28px 28px" }
     : { backgroundColor: bg };
 
+  const timeLabel = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
+
   return (
     <div className="flex h-screen flex-col bg-background">
-      {/* Top bar */}
-      <header className="flex flex-wrap items-center gap-3 border-b border-border bg-card px-4 py-2">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary font-display font-bold text-primary-foreground">G</div>
-          <span className="font-display text-lg font-bold tracking-tight">GED Math Board</span>
+      <header className="flex min-h-16 flex-wrap items-center gap-3 border-b border-exam-header-border bg-exam-header px-4 py-2 text-exam-header-foreground">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-exam-mark font-display text-lg font-black text-exam-mark-foreground">S</div>
+          <h1 className="font-display text-xl font-black sm:text-2xl">SOMSTART MATHS TEST</h1>
         </div>
-        <div className="mx-2 h-6 w-px bg-border" />
+        <div className="ml-auto flex items-center gap-2">
+          <span className="hidden text-xs font-bold uppercase sm:inline">Mathematical Reasoning Practice</span>
+          <div className="flex h-9 items-center gap-2 rounded-md border border-exam-header-border bg-exam-header-muted px-3 font-mono text-sm font-bold">
+            <Clock3 className="h-4 w-4" /> {timeLabel}
+            <Button type="button" variant="ghost" size="icon" onClick={() => setTimerRunning((value) => !value)} className="h-7 w-7 text-exam-header-foreground hover:bg-exam-header-hover hover:text-exam-header-foreground" aria-label={timerRunning ? "Pause timer" : "Resume timer"} title={timerRunning ? "Pause timer" : "Resume timer"}>
+              {timerRunning ? <Pause /> : <Play />}
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      <div className="flex min-h-12 flex-wrap items-center gap-2 border-b border-border bg-card px-4 py-2">
+        <div className="mr-2 flex items-center gap-3">
+          <span className="font-display text-sm font-bold">Question 1 of 1</span>
+          <span className="h-2 w-24 overflow-hidden rounded-full bg-muted"><span className="block h-full w-full bg-primary" /></span>
+        </div>
+        <Button type="button" variant={review ? "secondary" : "outline"} size="sm" onClick={() => setReview((value) => !value)} aria-pressed={review}>
+          <Flag className={review ? "fill-current" : ""} /> {review ? "Marked for review" : "Mark for review"}
+        </Button>
+        <div className="ml-auto flex items-center gap-2">
+          <Button type="button" variant="outline" size="sm" disabled><ChevronLeft /> Previous</Button>
+          <Button type="button" size="sm">Review answer <ChevronRight /></Button>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 border-b border-border bg-card px-4 py-2">
         <div className="flex items-center gap-1">
           {INK.map((c) => (
             <button key={c} onClick={() => { setInk(c); if (tool !== "pen" && tool !== "text") setTool("pen"); }} aria-label={`Ink ${c}`}
@@ -190,6 +234,7 @@ export function Whiteboard() {
           ))}
         </div>
         <input type="range" min={1} max={12} value={size} onChange={(e) => setSize(+e.target.value)} className="w-24 accent-[var(--primary)]" aria-label="Pen size" />
+        <Button type="button" variant="outline" size="sm" onClick={addTextBox}><Type /> Add text box</Button>
         <div className="mx-2 h-6 w-px bg-border" />
         <span className="text-xs font-medium text-muted-foreground">Background</span>
         <div className="flex items-center gap-1">
@@ -207,14 +252,14 @@ export function Whiteboard() {
             <Wand2 className="h-3.5 w-3.5" /> Handwriting → text {auto ? "ON" : "OFF"}
           </button>
         </div>
-      </header>
+      </div>
 
       {/* Question bar */}
       <div className="border-b border-border bg-secondary/60 px-4 py-2">
         <div className="flex items-start gap-2">
-          <span className="mt-2 rounded bg-primary px-2 py-0.5 font-display text-xs font-bold text-primary-foreground">Q</span>
+          <span className="mt-2 rounded bg-primary px-2 py-0.5 font-display text-xs font-bold text-primary-foreground">1</span>
           <textarea value={question} onChange={(e) => setQuestion(e.target.value)} rows={2}
-            placeholder="Type the question here, e.g. A rectangle has a perimeter of 36 ft and a length of 10 ft. What is its area?"
+            placeholder="Enter the mathematics question here…"
             className="min-h-[44px] flex-1 resize-y rounded-md border border-input bg-background px-3 py-2 text-base outline-none focus:ring-2 focus:ring-ring" />
           <div className="flex max-w-[260px] flex-wrap gap-1">
             {SYMBOLS.map((s) => (
@@ -254,7 +299,7 @@ export function Whiteboard() {
           )}
           {panels.calc && <Panel title="TI-30XS MultiView" width={280} initial={{ x: Math.max(16, (wrap.current?.clientWidth ?? 1000) - 300), y: 16 }} onClose={() => setPanels((p) => ({ ...p, calc: false }))}><Calculator /></Panel>}
           {panels.graph && <Panel title="Graph" width={370} initial={{ x: 40, y: 20 }} onClose={() => setPanels((p) => ({ ...p, graph: false }))}><GraphPanel /></Panel>}
-          {panels.formula && <Panel title="GED Formula Sheet" width={360} initial={{ x: 420, y: 20 }} onClose={() => setPanels((p) => ({ ...p, formula: false }))}><FormulaSheet onInsert={insertText} /></Panel>}
+          {panels.formula && <Panel title="Math Formula Sheet" width={360} initial={{ x: 420, y: 20 }} onClose={() => setPanels((p) => ({ ...p, formula: false }))}><FormulaSheet onInsert={insertText} /></Panel>}
         </div>
 
         {/* Right side buttons */}
