@@ -79,22 +79,19 @@ export function Calculator() {
     K(second ? "10ˣ" : "log", () => ins(second ? "10^(" : "logt("), "fn"),
     K(second ? "eˣ" : "ln", () => ins(second ? "e^(" : "ln("), "fn"),
     K("n/d", () => ins("/"), "fn"),
+    K("π", () => ins("π"), "fn"),
+    K("^", () => ins("^"), "fn"),
     K(second ? "sin⁻¹" : "sin", () => ins(second ? "asin(" : "sin("), "fn"),
     K(second ? "cos⁻¹" : "cos", () => ins(second ? "acos(" : "cos("), "fn"),
     K(second ? "tan⁻¹" : "tan", () => ins(second ? "atan(" : "tan("), "fn"),
-    K("π", () => ins("π"), "fn"),
     K(second ? "√" : "x²", () => ins(second ? "√(" : "^2"), "fn", "√"),
-    K("^", () => ins("^"), "fn"),
     K("x⁻¹", () => ins("^(-1)"), "fn"),
-    K("(", () => ins("("), "fn"),
-    K(")", () => ins(")"), "fn"),
-    K("÷", () => ins("÷"), "op"),
     K("7", () => ins("7"), "num"), K("8", () => ins("8"), "num"), K("9", () => ins("9"), "num"),
-    K("×", () => ins("×"), "op"),
+    K("(", () => ins("("), "fn"), K(")", () => ins(")"), "fn"),
     K("4", () => ins("4"), "num"), K("5", () => ins("5"), "num"), K("6", () => ins("6"), "num"),
-    K("−", () => ins("−"), "op"),
+    K("×", () => ins("×"), "op"), K("÷", () => ins("÷"), "op"),
     K("1", () => ins("1"), "num"), K("2", () => ins("2"), "num"), K("3", () => ins("3"), "num"),
-    K("+", () => ins("+"), "op"),
+    K("+", () => ins("+"), "op"), K("−", () => ins("−"), "op"),
     K("0", () => ins("0"), "num"), K(".", () => ins("."), "num"),
     K(second ? "ans" : "(−)", () => ins(second ? "ans" : "(-)"), "num", "ans"),
     K(second ? "%" : "enter", second ? () => ins("%") : evaluate, "enter", "%"),
@@ -123,12 +120,12 @@ export function Calculator() {
         ))}
         <div className="truncate">{expr}<span className="animate-pulse">▌</span></div>
       </div>
-      <div className="grid grid-cols-4 gap-1.5">
+      <div className="grid grid-cols-5 gap-1.5">
         {keys.map((k, i) => (
           <button
             key={i}
             onClick={k.a}
-            className={`relative h-8 rounded-md text-xs font-semibold shadow-sm transition active:translate-y-px ${style[k.v ?? "fn"]}`}
+            className={`${k.v === "enter" ? "col-span-2 " : ""}relative h-8 rounded-md text-xs font-semibold shadow-sm transition active:translate-y-px ${style[k.v ?? "fn"]}`}
           >
             {k.l}
           </button>
