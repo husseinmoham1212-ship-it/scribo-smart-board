@@ -9,7 +9,7 @@ const SECTIONS: { t: string; f: [string, string][] }[] = [
 export function FormulaSheet({ onInsert }: { onInsert: (s: string) => void }) {
   return (
     <div className="max-h-[60vh] space-y-3 overflow-y-auto pr-1">
-      <p className="text-xs text-muted-foreground">GED Mathematical Reasoning formula sheet. Click a formula to place it on the board.</p>
+      <p className="text-xs text-muted-foreground">Mathematical Reasoning formula sheet. Click a formula to place it on the board.</p>
       {SECTIONS.map((s) => (
         <div key={s.t}>
           <h4 className="mb-1 font-display text-xs font-bold uppercase tracking-wider text-primary">{s.t}</h4>

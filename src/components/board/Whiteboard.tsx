@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Calculator as CalcIcon, Eraser, LineChart, MousePointer2, Pen, Sigma, Trash2, Type, Undo2, Wand2, Loader2 } from "lucide-react";
+import { Calculator as CalcIcon, ChevronLeft, ChevronRight, Clock3, Eraser, Flag, LineChart, Loader2, MousePointer2, Pause, Pen, Play, Sigma, Trash2, Type, Undo2, Wand2 } from "lucide-react";
 import { recognizeHandwriting } from "@/lib/recognize.functions";
+import { Button } from "@/components/ui/button";
 import { Panel } from "./Panel";
 import { Calculator } from "./Calculator";
 import { GraphPanel } from "./GraphPanel";
@@ -35,6 +36,9 @@ export function Whiteboard() {
   const [msg, setMsg] = useState<string | null>(null);
   const [question, setQuestion] = useState("");
   const [panels, setPanels] = useState({ calc: false, graph: false, formula: false });
+  const [review, setReview] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [timerRunning, setTimerRunning] = useState(true);
   const drawing = useRef<Stroke | null>(null);
   const pending = useRef<number[]>([]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -43,6 +47,11 @@ export function Whiteboard() {
   const dark = bg === "#1f3a2e" || bg === "#1e2430";
 
   useEffect(() => setInk(dark ? "#ffffff" : "#111827"), [dark]);
+  useEffect(() => {
+    if (!timerRunning) return;
+    const interval = window.setInterval(() => setElapsed((value) => value + 1), 1000);
+    return () => window.clearInterval(interval);
+  }, [timerRunning]);
 
   const redraw = useCallback(() => {
     const c = canvas.current, w = wrap.current;
@@ -154,6 +163,15 @@ export function Whiteboard() {
     setTexts((arr) => [...arr, { id: uid++, x: w.clientWidth / 2 - 150, y: 80 + (arr.length % 10) * 40, text: t, size: 24, color: ink }]);
   };
 
+  const addTextBox = () => {
+    const w = wrap.current;
+    if (!w) return;
+    const id = uid++;
+    focusId.current = id;
+    setTexts((items) => [...items, { id, x: Math.max(24, w.clientWidth / 2 - 140), y: Math.max(48, w.clientHeight / 3), text: "Type your work here", size: 24, color: ink }]);
+    setTool("select");
+  };
+
   const undo = () => {
     const lastS = strokes[strokes.length - 1]?.id ?? 0, lastT = texts[texts.length - 1]?.id ?? 0;
     if (lastS > lastT) setStrokes((s) => s.slice(0, -1)); else setTexts((t) => t.slice(0, -1));
@@ -173,6 +191,8 @@ export function Whiteboard() {
   const bgStyle = bg === "grid"
     ? { backgroundColor: "#ffffff", backgroundImage: "linear-gradient(#e5e7eb 1px, transparent 1px), linear-gradient(90deg, #e5e7eb 1px, transparent 1px)", backgroundSize: "28px 28px" }
     : { backgroundColor: bg };
+
+  const timeLabel = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
 
   return (
     <div className="flex h-screen flex-col bg-background">
