@@ -27,7 +27,7 @@ export function Whiteboard() {
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [texts, setTexts] = useState<TextItem[]>([]);
   const [tool, setTool] = useState<Tool>("pen");
-  const [ink, setInk] = useState(INK[0]);
+  const [ink, setInk] = useState("#111827");
   const [size, setSize] = useState(3);
   const [bg, setBg] = useState("#ffffff");
   const [auto, setAuto] = useState(true);
@@ -60,7 +60,7 @@ export function Whiteboard() {
       ctx.lineCap = "round"; ctx.lineJoin = "round";
       ctx.beginPath();
       s.pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
-      if (s.pts.length === 1) ctx.lineTo(s.pts[0].x + 0.1, s.pts[0].y);
+      if (s.pts.length === 1) ctx.lineTo(s.pts[0]!.x + 0.1, s.pts[0]!.y);
       ctx.stroke();
     }
     ctx.globalCompositeOperation = "source-over";
@@ -100,7 +100,7 @@ export function Whiteboard() {
       if (r.text) {
         setStrokes((ss) => ss.filter((s) => !ids.includes(s.id)));
         const fs = Math.max(16, Math.min(64, (maxY - minY) * 0.75));
-        setTexts((t) => [...t, { id: uid++, x: minX, y: minY + (maxY - minY) / 2 - fs * 0.7, text: r.text, size: fs, color: group[0].color, auto: true }]);
+        setTexts((t) => [...t, { id: uid++, x: minX, y: minY + (maxY - minY) / 2 - fs * 0.7, text: r.text, size: fs, color: group[0]!.color, auto: true }]);
       }
     } catch { setMsg("Couldn't read that handwriting."); }
     finally { setBusy((b) => b - 1); }
