@@ -252,7 +252,7 @@ export function Whiteboard() {
           {msg && (
             <button onClick={() => setMsg(null)} className="absolute bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-full bg-foreground px-4 py-2 text-sm text-background shadow-lg">{msg}</button>
           )}
-          {panels.calc && <Panel title="TI-30XS MultiView" width={280} initial={{ x: 9999, y: 16 }} onClose={() => setPanels((p) => ({ ...p, calc: false }))}><Calculator /></Panel>}
+          {panels.calc && <Panel title="TI-30XS MultiView" width={280} initial={{ x: Math.max(16, (wrap.current?.clientWidth ?? 1000) - 300), y: 16 }} onClose={() => setPanels((p) => ({ ...p, calc: false }))}><Calculator /></Panel>}
           {panels.graph && <Panel title="Graph" width={370} initial={{ x: 40, y: 20 }} onClose={() => setPanels((p) => ({ ...p, graph: false }))}><GraphPanel /></Panel>}
           {panels.formula && <Panel title="GED Formula Sheet" width={360} initial={{ x: 420, y: 20 }} onClose={() => setPanels((p) => ({ ...p, formula: false }))}><FormulaSheet onInsert={insertText} /></Panel>}
         </div>
