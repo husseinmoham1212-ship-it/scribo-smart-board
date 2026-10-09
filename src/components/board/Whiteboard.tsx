@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Calculator as CalcIcon, ChevronLeft, ChevronRight, CircleHelp, Clock3, Eraser, LineChart, Loader2, MousePointer2, Pause, Pen, Play, Redo2, Sigma, SlidersHorizontal, Trash2, Type, Undo2, Wand2 } from "lucide-react";
+import { Calculator as CalcIcon, Check, ChevronLeft, ChevronRight, CircleHelp, Clock3, Eraser, LineChart, Loader2, MousePointer2, Pause, Pen, Pencil, Play, Redo2, Sigma, SlidersHorizontal, Trash2, Type, Undo2, Wand2, X } from "lucide-react";
 import { createWorker } from "tesseract.js";
 import { Button } from "@/components/ui/button";
 import { Panel } from "./Panel";
@@ -10,6 +10,7 @@ import { FormulaSheet } from "./FormulaSheet";
 type Pt = { x: number; y: number };
 type Stroke = { id: number; pts: Pt[]; color: string; size: number; erase: boolean };
 type TextItem = { id: number; x: number; y: number; text: string; size: number; color: string; auto?: boolean };
+type RecognitionDraft = { id: number; strokeIds: number[]; image: string; x: number; y: number; text: string; confidence: number; size: number; color: string; editing: boolean };
 type Tool = "pen" | "eraser" | "text" | "select";
 
 const BG = [
@@ -26,11 +27,11 @@ export function Whiteboard() {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [texts, setTexts] = useState<TextItem[]>([]);
+  const [drafts, setDrafts] = useState<RecognitionDraft[]>([]);
   const [tool, setTool] = useState<Tool>("pen");
   const [ink, setInk] = useState("#111827");
   const [size, setSize] = useState(3);
   const [bg, setBg] = useState("#ffffff");
-  const [auto, setAuto] = useState(true);
   const [busy, setBusy] = useState(0);
   const [msg, setMsg] = useState<string | null>(null);
   const [question, setQuestion] = useState("");
@@ -42,8 +43,8 @@ export function Whiteboard() {
   const history = useRef<{ s: Stroke[]; t: TextItem[] }[]>([]);
   const future = useRef<{ s: Stroke[]; t: TextItem[] }[]>([]);
   const drawing = useRef<Stroke | null>(null);
-  const pending = useRef<number[]>([]);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activePointerId = useRef<number | null>(null);
+  const pointerSnapshot = useRef<{ texts: TextItem[]; historyLength: number } | null>(null);
   const focusId = useRef<number | null>(null);
   const worker = useRef<ReturnType<typeof createWorker> | null>(null);
   const dark = bg === "#1f3a2e" || bg === "#1e2430";
@@ -124,19 +125,29 @@ export function Whiteboard() {
     setHistVersion((v) => v + 1);
   }, []);
 
-  const convert = useCallback(async (requestedIds?: number[]) => {
-    const ids = requestedIds ?? [...pending.current];
-    pending.current = pending.current.filter((id) => !ids.includes(id));
-    const group = strokesRef.current.filter((s) => ids.includes(s.id) && !s.erase);
+  const convert = useCallback(async () => {
+    const pendingIds = new Set(drafts.flatMap((draft) => draft.strokeIds));
+    const group = strokesRef.current.filter((stroke) => !stroke.erase && !pendingIds.has(stroke.id));
     if (!group.length) return;
-    const xs = group.flatMap((s) => s.pts.map((p) => p.x)), ys = group.flatMap((s) => s.pts.map((p) => p.y));
-    const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
-    const pad = 16, w = maxX - minX + pad * 2, h = maxY - minY + pad * 2;
-    const source = canvas.current;
-    if (!source) return;
+    const strokeIds = group.map((stroke) => stroke.id);
+    const xs = group.flatMap((stroke) => stroke.pts.map((point) => point.x));
+    const ys = group.flatMap((stroke) => stroke.pts.map((point) => point.y));
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    const padding = Math.max(20, ...group.map((stroke) => stroke.size * 3));
+    const originX = minX - padding;
+    const originY = minY - padding;
+    const width = maxX - minX + padding * 2;
+    const height = maxY - minY + padding * 2;
+    const scale = Math.max(
+      0.1,
+      Math.min(4, 4096 / width, 4096 / height, Math.sqrt(12_000_000 / (width * height)), 96 / Math.max(height, 1)),
+    );
     const image = document.createElement("canvas");
-    image.width = source.width;
-    image.height = source.height;
+    image.width = Math.max(1, Math.ceil(width * scale));
+    image.height = Math.max(1, Math.ceil(height * scale));
     const imageContext = image.getContext("2d");
     if (!imageContext) {
       setMsg("Couldn't prepare the handwriting for recognition.");
@@ -144,13 +155,7 @@ export function Whiteboard() {
     }
     imageContext.fillStyle = "#fff";
     imageContext.fillRect(0, 0, image.width, image.height);
-    imageContext.drawImage(source, 0, 0);
-    const dpr = window.devicePixelRatio || 1;
-    const left = Math.max(0, Math.floor((minX - pad) * dpr));
-    const top = Math.max(0, Math.floor((minY - pad) * dpr));
-    const right = Math.min(image.width, Math.ceil((maxX + pad) * dpr));
-    const bottom = Math.min(image.height, Math.ceil((maxY + pad) * dpr));
-    if (right <= left || bottom <= top) return;
+    imageContext.setTransform(scale, 0, 0, scale, -originX * scale, -originY * scale);
     setBusy((b) => b + 1);
     try {
       const workerPromise = worker.current ?? createWorker("eng");
@@ -162,25 +167,50 @@ export function Whiteboard() {
         if (worker.current === workerPromise) worker.current = null;
         throw error;
       }
-      const result = await tesseract.recognize(image.toDataURL("image/png"), {
-        rectangle: { left, top, width: right - left, height: bottom - top },
-      });
+      const recognitionStrokes = strokesRef.current.filter((stroke) => strokeIds.includes(stroke.id) || stroke.erase);
+      for (const stroke of recognitionStrokes) {
+        imageContext.globalCompositeOperation = stroke.erase ? "destination-out" : "source-over";
+        imageContext.strokeStyle = "#111";
+        imageContext.lineWidth = stroke.erase ? stroke.size * 6 : Math.max(3, stroke.size);
+        imageContext.lineCap = "round";
+        imageContext.lineJoin = "round";
+        imageContext.beginPath();
+        stroke.pts.forEach((point, index) => {
+          if (index === 0) imageContext.moveTo(point.x, point.y);
+          else imageContext.lineTo(point.x, point.y);
+        });
+        if (stroke.pts.length === 1) imageContext.lineTo(stroke.pts[0]!.x + 0.1, stroke.pts[0]!.y);
+        imageContext.stroke();
+      }
+      imageContext.globalCompositeOperation = "source-over";
+      const result = await tesseract.recognize(image.toDataURL("image/png"));
       const text = result.data.text.trim();
       if (text) {
-        pushHistory();
-        setStrokes((ss) => ss.filter((s) => !ids.includes(s.id)));
-        const fs = Math.max(16, Math.min(64, (maxY - minY) * 0.75));
-        setTexts((t) => [...t, { id: uid++, x: minX, y: minY + (maxY - minY) / 2 - fs * 0.7, text, size: fs, color: group[0]!.color, auto: true }]);
-      } else setMsg("No text recognized; handwriting was kept.");
+        const fontSize = Math.max(16, Math.min(64, (maxY - minY) * 0.75));
+        const confidence = Number.isFinite(result.data.confidence) ? result.data.confidence : 0;
+        setDrafts((current) => [...current, {
+          id: uid++,
+          strokeIds,
+          image: image.toDataURL("image/png"),
+          x: minX,
+          y: minY + (maxY - minY) / 2 - fontSize * 0.7,
+          text,
+          confidence,
+          size: fontSize,
+          color: group[0]!.color,
+          editing: false,
+        }]);
+        if (confidence < 65) setMsg("Low recognition confidence. Check the editable draft against your handwriting.");
+      } else setMsg("No text recognized. Your handwriting was kept.");
     } catch (error) {
       console.error("Handwriting recognition failed", error);
       setMsg("Couldn't read that handwriting. Your drawing was kept.");
     }
     finally { setBusy((b) => b - 1); }
-  }, [pushHistory]);
+  }, [drafts, pushHistory]);
 
-  const pos = (e: React.PointerEvent): Pt => {
-    const r = wrap.current!.getBoundingClientRect();
+  const pos = (e: React.PointerEvent<HTMLCanvasElement>): Pt => {
+    const r = e.currentTarget.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   };
 
@@ -188,18 +218,22 @@ export function Whiteboard() {
 
   const eraseTextAt = (point: Pt) => {
     const radius = Math.max(18, size * 3);
-    if (textsRef.current.length && !erasedThisStroke.current) {
-      erasedThisStroke.current = true;
-      pushHistory();
-    }
-    setTexts((items) => items.filter((item) => {
+    const remaining = textsRef.current.filter((item) => {
       const width = Math.max(40, item.text.length * item.size * 0.58);
       const height = item.size * 1.4;
       return point.x + radius < item.x || point.x - radius > item.x + width || point.y + radius < item.y || point.y - radius > item.y + height;
-    }));
+    });
+    if (remaining.length !== textsRef.current.length) {
+      if (!erasedThisStroke.current) {
+        erasedThisStroke.current = true;
+        pushHistory();
+      }
+      textsRef.current = remaining;
+      setTexts(remaining);
+    }
   };
 
-  const onDown = (e: React.PointerEvent) => {
+  const onDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (tool === "text") {
       const p = pos(e);
       const id = uid++;
@@ -208,35 +242,77 @@ export function Whiteboard() {
       setTool("select");
       return;
     }
-    if (tool === "select") return;
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    if (timer.current) clearTimeout(timer.current);
+    if (tool === "select" || activePointerId.current !== null) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    activePointerId.current = e.pointerId;
+    pointerSnapshot.current = { texts: textsRef.current, historyLength: history.current.length };
     const point = pos(e);
     erasedThisStroke.current = false;
     drawing.current = { id: uid++, pts: [point], color: ink, size, erase: tool === "eraser" };
     if (tool === "eraser") eraseTextAt(point);
     redraw();
   };
-  const onMove = (e: React.PointerEvent) => {
-    if (!drawing.current) return;
-    const evs = (e.nativeEvent as PointerEvent).getCoalescedEvents?.() ?? [];
+  const onMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!drawing.current || activePointerId.current !== e.pointerId) return;
+    const evs = e.nativeEvent.getCoalescedEvents?.() ?? [];
     if (evs.length) {
-      const r = wrap.current!.getBoundingClientRect();
+      const r = e.currentTarget.getBoundingClientRect();
       evs.forEach((ev) => drawing.current!.pts.push({ x: ev.clientX - r.left, y: ev.clientY - r.top }));
     } else drawing.current.pts.push(pos(e));
     if (tool === "eraser") eraseTextAt(pos(e));
     redraw();
   };
-  const onUp = () => {
+  const onUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (activePointerId.current !== e.pointerId) return;
     const s = drawing.current;
+    activePointerId.current = null;
+    pointerSnapshot.current = null;
     if (!s) return;
+    const finalPoint = pos(e);
+    const lastPoint = s.pts.at(-1);
+    if (!lastPoint || lastPoint.x !== finalPoint.x || lastPoint.y !== finalPoint.y) s.pts.push(finalPoint);
     drawing.current = null;
     pushHistory();
     setStrokes((ss) => [...ss, s]);
-    if (auto && !s.erase) {
-      pending.current.push(s.id);
-      timer.current = setTimeout(convert, 900);
+  };
+  const onCancel = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (activePointerId.current !== e.pointerId) return;
+    activePointerId.current = null;
+    drawing.current = null;
+    const snapshot = pointerSnapshot.current;
+    pointerSnapshot.current = null;
+    if (snapshot) {
+      textsRef.current = snapshot.texts;
+      setTexts(snapshot.texts);
+      if (erasedThisStroke.current && history.current.length === snapshot.historyLength + 1) history.current.pop();
     }
+    erasedThisStroke.current = false;
+    redraw();
+  };
+
+  const updateDraft = (id: number, patch: Partial<Pick<RecognitionDraft, "text" | "editing">>) => {
+    setDrafts((current) => current.map((draft) => draft.id === id ? { ...draft, ...patch } : draft));
+  };
+
+  const acceptDraft = (draft: RecognitionDraft) => {
+    const text = draft.text.trim();
+    if (!text) {
+      setMsg("Enter recognized text before accepting the draft.");
+      return;
+    }
+    pushHistory();
+    setStrokes((current) => current.filter((stroke) => !draft.strokeIds.includes(stroke.id)));
+    setTexts((current) => [...current, {
+      id: uid++,
+      x: draft.x,
+      y: draft.y,
+      text,
+      size: draft.size,
+      color: draft.color,
+      auto: true,
+    }]);
+    setDrafts((current) => current.filter((item) => item.id !== draft.id));
+    setMsg(null);
   };
 
   const insertText = (t: string) => {
@@ -324,21 +400,15 @@ export function Whiteboard() {
         </Button>
         <Button type="button" variant="outline" size="sm" onClick={addTextBox}><Type /> Add text box</Button>
         <div className="ml-auto flex items-center gap-2">
-          {busy > 0 && <span className="flex items-center gap-1 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Converting…</span>}
+          {busy > 0 && <span className="flex items-center gap-1 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Recognizing…</span>}
           <Button
             type="button"
             variant="outline"
             size="sm"
-            disabled={busy > 0 || !strokes.some((stroke) => !stroke.erase)}
-            onClick={() => {
-              if (timer.current) clearTimeout(timer.current);
-              void convert(strokesRef.current.filter((stroke) => !stroke.erase).map((stroke) => stroke.id));
-            }}
+            disabled={busy > 0 || !strokes.some((stroke) => !stroke.erase && !drafts.some((draft) => draft.strokeIds.includes(stroke.id)))}
+            onClick={() => void convert()}
           >
-            <Type className="h-3.5 w-3.5" /> Convert to text
-          </Button>
-          <Button type="button" variant={auto ? "default" : "secondary"} size="sm" onClick={() => setAuto((a) => !a)} aria-pressed={auto}>
-            <Wand2 className="h-3.5 w-3.5" /> Handwriting → text {auto ? "ON" : "OFF"}
+            <Wand2 className="h-3.5 w-3.5" /> Recognize handwriting
           </Button>
         </div>
       </div>}
@@ -363,13 +433,55 @@ export function Whiteboard() {
             ref={canvas}
             className="absolute inset-0 h-full w-full touch-none"
             style={{ cursor: tool === "text" ? "text" : tool === "select" ? "default" : tool === "eraser" ? "cell" : "crosshair" }}
-            onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
+            onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onCancel}
           />
           {texts.map((t) => (
             <TextBox key={t.id} item={t} interactive={tool === "select"} autoFocus={focusId.current === t.id}
               onChange={(patch) => { if (patch.text !== undefined) pushHistory(); setTexts((arr) => arr.map((x) => (x.id === t.id ? { ...x, ...patch } : x))); }}
               onDelete={() => { pushHistory(); setTexts((arr) => arr.filter((x) => x.id !== t.id)); }} />
           ))}
+          {drafts.length > 0 && (
+            <div className="absolute bottom-4 left-4 z-40 flex max-h-[45%] w-[min(28rem,calc(100%-2rem))] flex-col gap-3 overflow-y-auto">
+              {drafts.map((draft) => (
+                <section key={draft.id} className="rounded-lg border border-border bg-card p-3 text-card-foreground shadow-lg">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <h2 className="text-sm font-semibold">Recognition draft</h2>
+                    <span className={`text-xs ${draft.confidence < 65 ? "font-semibold text-destructive" : "text-muted-foreground"}`}>
+                      {draft.confidence < 65 ? "Low confidence — verify carefully" : `OCR confidence: ${Math.round(draft.confidence)}%`}
+                    </span>
+                  </div>
+                  <div className="flex gap-3">
+                    <img src={draft.image} alt="Original handwriting for comparison" className="h-16 max-w-28 rounded border border-border bg-white object-contain" />
+                    <textarea
+                      value={draft.text}
+                      readOnly={!draft.editing}
+                      onChange={(event) => updateDraft(draft.id, { text: event.target.value })}
+                      aria-label="Editable recognition draft"
+                      className="min-h-16 min-w-0 flex-1 resize-y rounded-md border border-input bg-background px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-ring read-only:cursor-default"
+                    />
+                  </div>
+                  <div className="mt-2 flex flex-wrap justify-end gap-2">
+                    {draft.editing ? (
+                      <Button type="button" size="sm" variant="outline" onClick={() => updateDraft(draft.id, { editing: false })}>
+                        <Check /> Done editing
+                      </Button>
+                    ) : (
+                      <Button type="button" size="sm" variant="outline" onClick={() => updateDraft(draft.id, { editing: true })}>
+                        <Pencil /> Edit
+                      </Button>
+                    )}
+                    <Button type="button" size="sm" onClick={() => acceptDraft(draft)}>
+                      <Check /> Accept and replace handwriting
+                    </Button>
+                    <Button type="button" size="sm" variant="secondary" onClick={() => setDrafts((current) => current.filter((item) => item.id !== draft.id))}>
+                      <X /> Reject
+                    </Button>
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">Handwriting remains on the board unless you accept this result.</p>
+                </section>
+              ))}
+            </div>
+          )}
           {msg && (
             <button onClick={() => setMsg(null)} className="absolute bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-full bg-foreground px-4 py-2 text-sm text-background shadow-lg">{msg}</button>
           )}
