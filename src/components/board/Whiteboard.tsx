@@ -154,9 +154,14 @@ export function Whiteboard() {
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   };
 
+  const erasedThisStroke = useRef(false);
+
   const eraseTextAt = (point: Pt) => {
     const radius = Math.max(18, size * 3);
-    if (textsRef.current.length) pushHistory();
+    if (textsRef.current.length && !erasedThisStroke.current) {
+      erasedThisStroke.current = true;
+      pushHistory();
+    }
     setTexts((items) => items.filter((item) => {
       const width = Math.max(40, item.text.length * item.size * 0.58);
       const height = item.size * 1.4;
@@ -177,6 +182,7 @@ export function Whiteboard() {
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     if (timer.current) clearTimeout(timer.current);
     const point = pos(e);
+    erasedThisStroke.current = false;
     drawing.current = { id: uid++, pts: [point], color: ink, size, erase: tool === "eraser" };
     if (tool === "eraser") eraseTextAt(point);
     redraw();
@@ -217,10 +223,6 @@ export function Whiteboard() {
     setTool("select");
   };
 
-  const undo = () => {
-    const lastS = strokes[strokes.length - 1]?.id ?? 0, lastT = texts[texts.length - 1]?.id ?? 0;
-    if (lastS > lastT) setStrokes((s) => s.slice(0, -1)); else setTexts((t) => t.slice(0, -1));
-  };
 
   const toolBtn = (t: Tool, Icon: typeof Pen, label: string) => (
     <button
