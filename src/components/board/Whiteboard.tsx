@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Calculator as CalcIcon, ChevronLeft, ChevronRight, CircleHelp, Clock3, Eraser, Flag, LineChart, Loader2, MousePointer2, Pause, Pen, Play, Redo2, Sigma, Trash2, Type, Undo2, Wand2 } from "lucide-react";
+import { Calculator as CalcIcon, ChevronLeft, ChevronRight, CircleHelp, Clock3, Eraser, LineChart, Loader2, MousePointer2, Pause, Pen, Play, Redo2, Sigma, SlidersHorizontal, Trash2, Type, Undo2, Wand2 } from "lucide-react";
 import { recognizeHandwriting } from "@/lib/recognize.functions";
 import { Button } from "@/components/ui/button";
 import { Panel } from "./Panel";
@@ -36,7 +36,7 @@ export function Whiteboard() {
   const [msg, setMsg] = useState<string | null>(null);
   const [question, setQuestion] = useState("");
   const [panels, setPanels] = useState({ calc: false, graph: false, formula: false, question: false });
-  const [review, setReview] = useState(false);
+  const [showWritingControls, setShowWritingControls] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [timerRunning, setTimerRunning] = useState(true);
   const [histVersion, setHistVersion] = useState(0);
@@ -264,8 +264,16 @@ export function Whiteboard() {
           <span className="font-display text-sm font-bold">Question 1 of 1</span>
           <span className="h-2 w-24 overflow-hidden rounded-full bg-muted"><span className="block h-full w-full bg-primary" /></span>
         </div>
-        <Button type="button" variant={review ? "secondary" : "outline"} size="sm" onClick={() => setReview((value) => !value)} aria-pressed={review}>
-          <Flag className={review ? "fill-current" : ""} /> {review ? "Marked for review" : "Mark for review"}
+        <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Board background colours">
+          {BG.map((b) => (
+            <Button type="button" variant="outline" size="icon" key={b.n} title={`Background ${b.n}`} onClick={() => setBg(b.v)} aria-label={`Background ${b.n}`} aria-pressed={bg === b.v}
+              className={`h-6 w-6 rounded-md p-0 ${bg === b.v ? "ring-2 ring-primary ring-offset-2 ring-offset-card" : ""}`}
+              style={b.v === "grid" ? { backgroundColor: "#fff", backgroundImage: "linear-gradient(#cbd5e1 1px,transparent 1px),linear-gradient(90deg,#cbd5e1 1px,transparent 1px)", backgroundSize: "6px 6px" } : { background: b.v }} />
+          ))}
+          <input type="color" value={bg.startsWith("#") ? bg : "#ffffff"} onChange={(e) => setBg(e.target.value)} className="h-6 w-7 cursor-pointer rounded border border-border bg-transparent" aria-label="Custom background" />
+        </div>
+        <Button type="button" variant={showWritingControls ? "secondary" : "outline"} size="sm" onClick={() => setShowWritingControls((value) => !value)} aria-expanded={showWritingControls} aria-controls="writing-controls" title={showWritingControls ? "Hide writing controls" : "Show writing controls"}>
+          <SlidersHorizontal /> {showWritingControls ? "Hide tools" : "Show tools"}
         </Button>
         <div className="ml-auto flex items-center gap-2">
           <Button type="button" variant="outline" size="sm" disabled><ChevronLeft /> Previous</Button>
@@ -273,11 +281,11 @@ export function Whiteboard() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 border-b border-border bg-card px-4 py-2">
+      {showWritingControls && <div id="writing-controls" className="flex flex-wrap items-center gap-3 border-b border-border bg-card px-4 py-2">
         <div className="flex items-center gap-1">
           {INK.map((c) => (
-            <button key={c} onClick={() => { setInk(c); if (tool !== "pen" && tool !== "text") setTool("pen"); }} aria-label={`Ink ${c}`}
-              className={`h-6 w-6 rounded-full border border-border ${ink === c ? "ring-2 ring-primary ring-offset-2 ring-offset-card" : ""}`} style={{ background: c }} />
+            <Button type="button" variant="outline" size="icon" key={c} onClick={() => { setInk(c); if (tool !== "pen" && tool !== "text") setTool("pen"); }} aria-label={`Ink ${c}`} title={`Ink ${c}`} aria-pressed={ink === c}
+              className={`h-6 w-6 rounded-full p-0 ${ink === c ? "ring-2 ring-primary ring-offset-2 ring-offset-card" : ""}`} style={{ background: c }} />
           ))}
         </div>
         <input type="range" min={1} max={12} value={size} onChange={(e) => setSize(+e.target.value)} className="w-24 accent-[var(--primary)]" aria-label={tool === "eraser" ? "Rubber size" : "Pen size"} />
@@ -285,24 +293,13 @@ export function Whiteboard() {
           <Eraser /> Rubber
         </Button>
         <Button type="button" variant="outline" size="sm" onClick={addTextBox}><Type /> Add text box</Button>
-        <div className="mx-2 h-6 w-px bg-border" />
-        <span className="text-xs font-medium text-muted-foreground">Background</span>
-        <div className="flex items-center gap-1">
-          {BG.map((b) => (
-            <button key={b.n} title={b.n} onClick={() => setBg(b.v)} aria-label={`Background ${b.n}`}
-              className={`h-6 w-6 rounded-md border border-border ${bg === b.v ? "ring-2 ring-primary ring-offset-2 ring-offset-card" : ""}`}
-              style={b.v === "grid" ? { backgroundColor: "#fff", backgroundImage: "linear-gradient(#cbd5e1 1px,transparent 1px),linear-gradient(90deg,#cbd5e1 1px,transparent 1px)", backgroundSize: "6px 6px" } : { background: b.v }} />
-          ))}
-          <input type="color" value={bg.startsWith("#") ? bg : "#ffffff"} onChange={(e) => setBg(e.target.value)} className="h-6 w-7 cursor-pointer rounded border border-border bg-transparent" aria-label="Custom background" />
-        </div>
         <div className="ml-auto flex items-center gap-2">
           {busy > 0 && <span className="flex items-center gap-1 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Converting…</span>}
-          <button onClick={() => setAuto((a) => !a)}
-            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${auto ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}>
+          <Button type="button" variant={auto ? "default" : "secondary"} size="sm" onClick={() => setAuto((a) => !a)} aria-pressed={auto}>
             <Wand2 className="h-3.5 w-3.5" /> Handwriting → text {auto ? "ON" : "OFF"}
-          </button>
+          </Button>
         </div>
-      </div>
+      </div>}
 
 
       <div className="relative flex flex-1 overflow-hidden">
