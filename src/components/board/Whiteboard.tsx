@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Calculator as CalcIcon, ChevronLeft, ChevronRight, Clock3, Eraser, Flag, LineChart, Loader2, MousePointer2, Pause, Pen, Play, Redo2, Sigma, Trash2, Type, Undo2, Wand2 } from "lucide-react";
+import { Calculator as CalcIcon, ChevronLeft, ChevronRight, CircleHelp, Clock3, Eraser, Flag, LineChart, Loader2, MousePointer2, Pause, Pen, Play, Redo2, Sigma, Trash2, Type, Undo2, Wand2 } from "lucide-react";
 import { recognizeHandwriting } from "@/lib/recognize.functions";
 import { Button } from "@/components/ui/button";
 import { Panel } from "./Panel";
@@ -35,7 +35,7 @@ export function Whiteboard() {
   const [busy, setBusy] = useState(0);
   const [msg, setMsg] = useState<string | null>(null);
   const [question, setQuestion] = useState("");
-  const [panels, setPanels] = useState({ calc: false, graph: false, formula: false });
+  const [panels, setPanels] = useState({ calc: false, graph: false, formula: false, question: false });
   const [review, setReview] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [timerRunning, setTimerRunning] = useState(true);
@@ -304,20 +304,6 @@ export function Whiteboard() {
         </div>
       </div>
 
-      {/* Question bar */}
-      <div className="border-b border-border bg-secondary/60 px-4 py-2">
-        <div className="flex items-start gap-2">
-          <span className="mt-2 rounded bg-primary px-2 py-0.5 font-display text-xs font-bold text-primary-foreground">1</span>
-          <textarea value={question} onChange={(e) => setQuestion(e.target.value)} rows={2}
-            placeholder="Enter the mathematics question here…"
-            className="min-h-[44px] flex-1 resize-y rounded-md border border-input bg-background px-3 py-2 text-base outline-none focus:ring-2 focus:ring-ring" />
-          <div className="flex max-w-[260px] flex-wrap gap-1">
-            {SYMBOLS.map((s) => (
-              <button key={s} onClick={() => setQuestion((q) => q + s)} className="h-7 w-7 rounded border border-border bg-background font-mono text-sm hover:bg-accent">{s}</button>
-            ))}
-          </div>
-        </div>
-      </div>
 
       <div className="relative flex flex-1 overflow-hidden">
         {/* Left tools */}
@@ -351,11 +337,25 @@ export function Whiteboard() {
           {panels.calc && <Panel title="TI-30XS MultiView" width={280} initial={{ x: Math.max(16, (wrap.current?.clientWidth ?? 1000) - 300), y: 16 }} onClose={() => setPanels((p) => ({ ...p, calc: false }))}><Calculator /></Panel>}
           {panels.graph && <Panel title="Graph" width={370} initial={{ x: 40, y: 20 }} onClose={() => setPanels((p) => ({ ...p, graph: false }))}><GraphPanel /></Panel>}
           {panels.formula && <Panel title="Math Formula Sheet" width={360} initial={{ x: 420, y: 20 }} onClose={() => setPanels((p) => ({ ...p, formula: false }))}><FormulaSheet onInsert={insertText} /></Panel>}
+          {panels.question && (
+            <Panel title="Question 1" width={380} initial={{ x: 60, y: 16 }} onClose={() => setPanels((p) => ({ ...p, question: false }))}>
+              <div className="flex flex-col gap-2">
+                <textarea value={question} onChange={(e) => setQuestion(e.target.value)} rows={4}
+                  placeholder="Enter the mathematics question here…"
+                  className="min-h-[88px] w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-base outline-none focus:ring-2 focus:ring-ring" />
+                <div className="flex flex-wrap gap-1">
+                  {SYMBOLS.map((s) => (
+                    <button key={s} onClick={() => setQuestion((q) => q + s)} className="h-8 w-8 rounded border border-border bg-background font-mono text-sm hover:bg-accent">{s}</button>
+                  ))}
+                </div>
+              </div>
+            </Panel>
+          )}
         </div>
 
         {/* Right side buttons */}
         <aside className="z-30 flex w-16 flex-col items-center gap-2 border-l border-border bg-card py-3">
-          {([["calc", CalcIcon, "Calculator"], ["graph", LineChart, "Graph"], ["formula", Sigma, "Formulas"]] as const).map(([k, Icon, l]) => (
+          {([["calc", CalcIcon, "Calculator"], ["graph", LineChart, "Graph"], ["formula", Sigma, "Formulas"], ["question", CircleHelp, "Question"]] as const).map(([k, Icon, l]) => (
             <button key={k} onClick={() => setPanels((p) => ({ ...p, [k]: !p[k] }))}
               className={`flex w-12 flex-col items-center gap-0.5 rounded-lg py-2 text-[10px] font-semibold transition ${panels[k] ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`}>
               <Icon className="h-5 w-5" />{l}
