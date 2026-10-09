@@ -327,8 +327,8 @@ export function Whiteboard() {
           {toolBtn("text", Type, "Text box")}
           {toolBtn("select", MousePointer2, "Move / edit text")}
           <div className="my-2 h-px w-8 bg-border" />
-          <button onClick={undo} disabled={!history.current.length} title="Undo — bring back what you deleted" aria-label="Undo — bring back what you deleted" className="flex h-10 w-10 items-center justify-center rounded-lg hover:bg-accent disabled:opacity-40 disabled:hover:bg-transparent"><Undo2 className="h-5 w-5" /></button>
-          <button onClick={redo} disabled={!future.current.length} title="Redo" aria-label="Redo" className="flex h-10 w-10 items-center justify-center rounded-lg hover:bg-accent disabled:opacity-40 disabled:hover:bg-transparent"><Redo2 className="h-5 w-5" /></button>
+          <button onClick={undo} disabled={histVersion < 0 || !history.current.length} title="Undo — bring back what you deleted" aria-label="Undo — bring back what you deleted" className="flex h-10 w-10 items-center justify-center rounded-lg hover:bg-accent disabled:opacity-40 disabled:hover:bg-transparent"><Undo2 className="h-5 w-5" /></button>
+          <button onClick={redo} disabled={histVersion < 0 || !future.current.length} title="Redo" aria-label="Redo" className="flex h-10 w-10 items-center justify-center rounded-lg hover:bg-accent disabled:opacity-40 disabled:hover:bg-transparent"><Redo2 className="h-5 w-5" /></button>
           <button onClick={() => { pushHistory(); setStrokes([]); setTexts([]); }} title="Clear board" aria-label="Clear board" className="flex h-10 w-10 items-center justify-center rounded-lg text-destructive hover:bg-accent"><Trash2 className="h-5 w-5" /></button>
         </aside>
 
