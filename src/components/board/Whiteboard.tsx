@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Calculator as CalcIcon, ChevronLeft, ChevronRight, Clock3, Eraser, Flag, LineChart, Loader2, MousePointer2, Pause, Pen, Play, Sigma, Trash2, Type, Undo2, Wand2 } from "lucide-react";
+import { Calculator as CalcIcon, ChevronLeft, ChevronRight, Clock3, Eraser, Flag, LineChart, Loader2, MousePointer2, Pause, Pen, Play, Redo2, Sigma, Trash2, Type, Undo2, Wand2 } from "lucide-react";
 import { recognizeHandwriting } from "@/lib/recognize.functions";
 import { Button } from "@/components/ui/button";
 import { Panel } from "./Panel";
@@ -39,6 +39,9 @@ export function Whiteboard() {
   const [review, setReview] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [timerRunning, setTimerRunning] = useState(true);
+  const [histVersion, setHistVersion] = useState(0);
+  const history = useRef<{ s: Stroke[]; t: TextItem[] }[]>([]);
+  const future = useRef<{ s: Stroke[]; t: TextItem[] }[]>([]);
   const drawing = useRef<Stroke | null>(null);
   const pending = useRef<number[]>([]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
