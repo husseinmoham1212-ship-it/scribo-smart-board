@@ -337,6 +337,20 @@ export function Whiteboard() {
           {panels.calc && <Panel title="TI-30XS MultiView" width={280} initial={{ x: Math.max(16, (wrap.current?.clientWidth ?? 1000) - 300), y: 16 }} onClose={() => setPanels((p) => ({ ...p, calc: false }))}><Calculator /></Panel>}
           {panels.graph && <Panel title="Graph" width={370} initial={{ x: 40, y: 20 }} onClose={() => setPanels((p) => ({ ...p, graph: false }))}><GraphPanel /></Panel>}
           {panels.formula && <Panel title="Math Formula Sheet" width={360} initial={{ x: 420, y: 20 }} onClose={() => setPanels((p) => ({ ...p, formula: false }))}><FormulaSheet onInsert={insertText} /></Panel>}
+          {panels.question && (
+            <Panel title="Question 1" width={380} initial={{ x: 60, y: 16 }} onClose={() => setPanels((p) => ({ ...p, question: false }))}>
+              <div className="flex flex-col gap-2">
+                <textarea value={question} onChange={(e) => setQuestion(e.target.value)} rows={4}
+                  placeholder="Enter the mathematics question here…"
+                  className="min-h-[88px] w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-base outline-none focus:ring-2 focus:ring-ring" />
+                <div className="flex flex-wrap gap-1">
+                  {SYMBOLS.map((s) => (
+                    <button key={s} onClick={() => setQuestion((q) => q + s)} className="h-8 w-8 rounded border border-border bg-background font-mono text-sm hover:bg-accent">{s}</button>
+                  ))}
+                </div>
+              </div>
+            </Panel>
+          )}
         </div>
 
         {/* Right side buttons */}
