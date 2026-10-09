@@ -120,6 +120,33 @@ export function Whiteboard() {
 
   const strokesRef = useRef(strokes);
   strokesRef.current = strokes;
+  const textsRef = useRef(texts);
+  textsRef.current = texts;
+
+  const pushHistory = useCallback(() => {
+    history.current.push({ s: strokesRef.current, t: textsRef.current });
+    if (history.current.length > 100) history.current.shift();
+    future.current = [];
+    setHistVersion((v) => v + 1);
+  }, []);
+
+  const undo = useCallback(() => {
+    const prev = history.current.pop();
+    if (!prev) return;
+    future.current.push({ s: strokesRef.current, t: textsRef.current });
+    setStrokes(prev.s);
+    setTexts(prev.t);
+    setHistVersion((v) => v + 1);
+  }, []);
+
+  const redo = useCallback(() => {
+    const next = future.current.pop();
+    if (!next) return;
+    history.current.push({ s: strokesRef.current, t: textsRef.current });
+    setStrokes(next.s);
+    setTexts(next.t);
+    setHistVersion((v) => v + 1);
+  }, []);
 
   const pos = (e: React.PointerEvent): Pt => {
     const r = wrap.current!.getBoundingClientRect();
