@@ -355,7 +355,7 @@ export function Whiteboard() {
 
         {/* Right side buttons */}
         <aside className="z-30 flex w-16 flex-col items-center gap-2 border-l border-border bg-card py-3">
-          {([["calc", CalcIcon, "Calculator"], ["graph", LineChart, "Graph"], ["formula", Sigma, "Formulas"]] as const).map(([k, Icon, l]) => (
+          {([["calc", CalcIcon, "Calculator"], ["graph", LineChart, "Graph"], ["formula", Sigma, "Formulas"], ["question", CircleHelp, "Question"]] as const).map(([k, Icon, l]) => (
             <button key={k} onClick={() => setPanels((p) => ({ ...p, [k]: !p[k] }))}
               className={`flex w-12 flex-col items-center gap-0.5 rounded-lg py-2 text-[10px] font-semibold transition ${panels[k] ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`}>
               <Icon className="h-5 w-5" />{l}
