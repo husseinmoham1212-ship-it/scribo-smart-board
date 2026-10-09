@@ -304,20 +304,6 @@ export function Whiteboard() {
         </div>
       </div>
 
-      {/* Question bar */}
-      <div className="border-b border-border bg-secondary/60 px-4 py-2">
-        <div className="flex items-start gap-2">
-          <span className="mt-2 rounded bg-primary px-2 py-0.5 font-display text-xs font-bold text-primary-foreground">1</span>
-          <textarea value={question} onChange={(e) => setQuestion(e.target.value)} rows={2}
-            placeholder="Enter the mathematics question here…"
-            className="min-h-[44px] flex-1 resize-y rounded-md border border-input bg-background px-3 py-2 text-base outline-none focus:ring-2 focus:ring-ring" />
-          <div className="flex max-w-[260px] flex-wrap gap-1">
-            {SYMBOLS.map((s) => (
-              <button key={s} onClick={() => setQuestion((q) => q + s)} className="h-7 w-7 rounded border border-border bg-background font-mono text-sm hover:bg-accent">{s}</button>
-            ))}
-          </div>
-        </div>
-      </div>
 
       <div className="relative flex flex-1 overflow-hidden">
         {/* Left tools */}
