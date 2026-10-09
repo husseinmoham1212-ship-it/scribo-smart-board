@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
 import { Calculator as CalcIcon, ChevronLeft, ChevronRight, CircleHelp, Clock3, Eraser, LineChart, Loader2, MousePointer2, Pause, Pen, Play, Redo2, Sigma, SlidersHorizontal, Trash2, Type, Undo2, Wand2 } from "lucide-react";
-import { recognizeHandwriting } from "@/lib/recognize.functions";
+import { createWorker } from "tesseract.js";
 import { Button } from "@/components/ui/button";
 import { Panel } from "./Panel";
 import { Calculator } from "./Calculator";
@@ -46,8 +45,18 @@ export function Whiteboard() {
   const pending = useRef<number[]>([]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const focusId = useRef<number | null>(null);
-  const recognize = useServerFn(recognizeHandwriting);
+  const worker = useRef<ReturnType<typeof createWorker> | null>(null);
   const dark = bg === "#1f3a2e" || bg === "#1e2430";
+
+  useEffect(() => () => {
+    const currentWorker = worker.current;
+    worker.current = null;
+    if (currentWorker) {
+      void currentWorker.then((tesseract) => tesseract.terminate()).catch((error: unknown) => {
+        console.error("Couldn't stop the handwriting recognition worker", error);
+      });
+    }
+  }, []);
 
   useEffect(() => setInk(dark ? "#ffffff" : "#111827"), [dark]);
   useEffect(() => {
@@ -115,39 +124,60 @@ export function Whiteboard() {
     setHistVersion((v) => v + 1);
   }, []);
 
-  const convert = useCallback(async () => {
-    const ids = [...pending.current];
-    pending.current = [];
+  const convert = useCallback(async (requestedIds?: number[]) => {
+    const ids = requestedIds ?? [...pending.current];
+    pending.current = pending.current.filter((id) => !ids.includes(id));
     const group = strokesRef.current.filter((s) => ids.includes(s.id) && !s.erase);
     if (!group.length) return;
     const xs = group.flatMap((s) => s.pts.map((p) => p.x)), ys = group.flatMap((s) => s.pts.map((p) => p.y));
     const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
     const pad = 16, w = maxX - minX + pad * 2, h = maxY - minY + pad * 2;
-    const off = document.createElement("canvas");
-    const scale = Math.min(2, 800 / Math.max(w, h)) || 1;
-    off.width = Math.max(32, w * scale); off.height = Math.max(32, h * scale);
-    const ctx = off.getContext("2d")!;
-    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, off.width, off.height);
-    ctx.scale(scale, scale); ctx.strokeStyle = "#000"; ctx.lineCap = "round"; ctx.lineJoin = "round";
-    for (const s of group) {
-      ctx.lineWidth = Math.max(2.5, s.size);
-      ctx.beginPath();
-      s.pts.forEach((p, i) => (i ? ctx.lineTo(p.x - minX + pad, p.y - minY + pad) : ctx.moveTo(p.x - minX + pad, p.y - minY + pad)));
-      ctx.stroke();
+    const source = canvas.current;
+    if (!source) return;
+    const image = document.createElement("canvas");
+    image.width = source.width;
+    image.height = source.height;
+    const imageContext = image.getContext("2d");
+    if (!imageContext) {
+      setMsg("Couldn't prepare the handwriting for recognition.");
+      return;
     }
+    imageContext.fillStyle = "#fff";
+    imageContext.fillRect(0, 0, image.width, image.height);
+    imageContext.drawImage(source, 0, 0);
+    const dpr = window.devicePixelRatio || 1;
+    const left = Math.max(0, Math.floor((minX - pad) * dpr));
+    const top = Math.max(0, Math.floor((minY - pad) * dpr));
+    const right = Math.min(image.width, Math.ceil((maxX + pad) * dpr));
+    const bottom = Math.min(image.height, Math.ceil((maxY + pad) * dpr));
+    if (right <= left || bottom <= top) return;
     setBusy((b) => b + 1);
     try {
-      const r = await recognize({ data: { image: off.toDataURL("image/png") } });
-      if (r.error) setMsg(r.error);
-      if (r.text) {
+      const workerPromise = worker.current ?? createWorker("eng");
+      worker.current = workerPromise;
+      let tesseract: Awaited<typeof workerPromise>;
+      try {
+        tesseract = await workerPromise;
+      } catch (error) {
+        if (worker.current === workerPromise) worker.current = null;
+        throw error;
+      }
+      const result = await tesseract.recognize(image.toDataURL("image/png"), {
+        rectangle: { left, top, width: right - left, height: bottom - top },
+      });
+      const text = result.data.text.trim();
+      if (text) {
         pushHistory();
         setStrokes((ss) => ss.filter((s) => !ids.includes(s.id)));
         const fs = Math.max(16, Math.min(64, (maxY - minY) * 0.75));
-        setTexts((t) => [...t, { id: uid++, x: minX, y: minY + (maxY - minY) / 2 - fs * 0.7, text: r.text, size: fs, color: group[0]!.color, auto: true }]);
-      }
-    } catch { setMsg("Couldn't read that handwriting."); }
+        setTexts((t) => [...t, { id: uid++, x: minX, y: minY + (maxY - minY) / 2 - fs * 0.7, text, size: fs, color: group[0]!.color, auto: true }]);
+      } else setMsg("No text recognized; handwriting was kept.");
+    } catch (error) {
+      console.error("Handwriting recognition failed", error);
+      setMsg("Couldn't read that handwriting. Your drawing was kept.");
+    }
     finally { setBusy((b) => b - 1); }
-  }, [recognize, pushHistory]);
+  }, [pushHistory]);
 
   const pos = (e: React.PointerEvent): Pt => {
     const r = wrap.current!.getBoundingClientRect();
@@ -295,6 +325,18 @@ export function Whiteboard() {
         <Button type="button" variant="outline" size="sm" onClick={addTextBox}><Type /> Add text box</Button>
         <div className="ml-auto flex items-center gap-2">
           {busy > 0 && <span className="flex items-center gap-1 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Converting…</span>}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={busy > 0 || !strokes.some((stroke) => !stroke.erase)}
+            onClick={() => {
+              if (timer.current) clearTimeout(timer.current);
+              void convert(strokesRef.current.filter((stroke) => !stroke.erase).map((stroke) => stroke.id));
+            }}
+          >
+            <Type className="h-3.5 w-3.5" /> Convert to text
+          </Button>
           <Button type="button" variant={auto ? "default" : "secondary"} size="sm" onClick={() => setAuto((a) => !a)} aria-pressed={auto}>
             <Wand2 className="h-3.5 w-3.5" /> Handwriting → text {auto ? "ON" : "OFF"}
           </Button>
