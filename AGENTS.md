@@ -8,3 +8,5 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- Keep optional writing settings in a collapsible toolbar, separate from always-available background swatches, so hiding settings expands the working canvas without changing tool state.
