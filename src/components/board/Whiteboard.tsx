@@ -327,8 +327,9 @@ export function Whiteboard() {
           {toolBtn("text", Type, "Text box")}
           {toolBtn("select", MousePointer2, "Move / edit text")}
           <div className="my-2 h-px w-8 bg-border" />
-          <button onClick={undo} title="Undo" aria-label="Undo" className="flex h-10 w-10 items-center justify-center rounded-lg hover:bg-accent"><Undo2 className="h-5 w-5" /></button>
-          <button onClick={() => { setStrokes([]); setTexts([]); }} title="Clear board" aria-label="Clear board" className="flex h-10 w-10 items-center justify-center rounded-lg text-destructive hover:bg-accent"><Trash2 className="h-5 w-5" /></button>
+          <button onClick={undo} disabled={!history.current.length} title="Undo — bring back what you deleted" aria-label="Undo — bring back what you deleted" className="flex h-10 w-10 items-center justify-center rounded-lg hover:bg-accent disabled:opacity-40 disabled:hover:bg-transparent"><Undo2 className="h-5 w-5" /></button>
+          <button onClick={redo} disabled={!future.current.length} title="Redo" aria-label="Redo" className="flex h-10 w-10 items-center justify-center rounded-lg hover:bg-accent disabled:opacity-40 disabled:hover:bg-transparent"><Redo2 className="h-5 w-5" /></button>
+          <button onClick={() => { pushHistory(); setStrokes([]); setTexts([]); }} title="Clear board" aria-label="Clear board" className="flex h-10 w-10 items-center justify-center rounded-lg text-destructive hover:bg-accent"><Trash2 className="h-5 w-5" /></button>
         </aside>
 
         {/* Working area */}
@@ -341,8 +342,8 @@ export function Whiteboard() {
           />
           {texts.map((t) => (
             <TextBox key={t.id} item={t} interactive={tool === "select"} autoFocus={focusId.current === t.id}
-              onChange={(patch) => setTexts((arr) => arr.map((x) => (x.id === t.id ? { ...x, ...patch } : x)))}
-              onDelete={() => setTexts((arr) => arr.filter((x) => x.id !== t.id))} />
+              onChange={(patch) => { if (patch.text !== undefined) pushHistory(); setTexts((arr) => arr.map((x) => (x.id === t.id ? { ...x, ...patch } : x))); }}
+              onDelete={() => { pushHistory(); setTexts((arr) => arr.filter((x) => x.id !== t.id)); }} />
           ))}
           {msg && (
             <button onClick={() => setMsg(null)} className="absolute bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-full bg-foreground px-4 py-2 text-sm text-background shadow-lg">{msg}</button>
