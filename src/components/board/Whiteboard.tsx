@@ -110,13 +110,14 @@ export function Whiteboard() {
       const r = await recognize({ data: { image: off.toDataURL("image/png") } });
       if (r.error) setMsg(r.error);
       if (r.text) {
+        pushHistory();
         setStrokes((ss) => ss.filter((s) => !ids.includes(s.id)));
         const fs = Math.max(16, Math.min(64, (maxY - minY) * 0.75));
         setTexts((t) => [...t, { id: uid++, x: minX, y: minY + (maxY - minY) / 2 - fs * 0.7, text: r.text, size: fs, color: group[0]!.color, auto: true }]);
       }
     } catch { setMsg("Couldn't read that handwriting."); }
     finally { setBusy((b) => b - 1); }
-  }, [recognize]);
+  }, [recognize, pushHistory]);
 
   const strokesRef = useRef(strokes);
   strokesRef.current = strokes;
@@ -155,6 +156,7 @@ export function Whiteboard() {
 
   const eraseTextAt = (point: Pt) => {
     const radius = Math.max(18, size * 3);
+    if (textsRef.current.length) pushHistory();
     setTexts((items) => items.filter((item) => {
       const width = Math.max(40, item.text.length * item.size * 0.58);
       const height = item.size * 1.4;
@@ -193,6 +195,7 @@ export function Whiteboard() {
     const s = drawing.current;
     if (!s) return;
     drawing.current = null;
+    pushHistory();
     setStrokes((ss) => [...ss, s]);
     if (auto && !s.erase) {
       pending.current.push(s.id);
