@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Calculator as CalcIcon, ChevronLeft, ChevronRight, Clock3, Eraser, Flag, LineChart, Loader2, MousePointer2, Pause, Pen, Play, Sigma, Trash2, Type, Undo2, Wand2 } from "lucide-react";
+import { Calculator as CalcIcon, ChevronLeft, ChevronRight, Clock3, Eraser, Flag, LineChart, Loader2, MousePointer2, Pause, Pen, Play, Redo2, Sigma, Trash2, Type, Undo2, Wand2 } from "lucide-react";
 import { recognizeHandwriting } from "@/lib/recognize.functions";
 import { Button } from "@/components/ui/button";
 import { Panel } from "./Panel";
@@ -39,6 +39,9 @@ export function Whiteboard() {
   const [review, setReview] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [timerRunning, setTimerRunning] = useState(true);
+  const [histVersion, setHistVersion] = useState(0);
+  const history = useRef<{ s: Stroke[]; t: TextItem[] }[]>([]);
+  const future = useRef<{ s: Stroke[]; t: TextItem[] }[]>([]);
   const drawing = useRef<Stroke | null>(null);
   const pending = useRef<number[]>([]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -82,6 +85,36 @@ export function Whiteboard() {
     return () => ro.disconnect();
   }, [redraw]);
 
+  const strokesRef = useRef(strokes);
+  strokesRef.current = strokes;
+  const textsRef = useRef(texts);
+  textsRef.current = texts;
+
+  const pushHistory = useCallback(() => {
+    history.current.push({ s: strokesRef.current, t: textsRef.current });
+    if (history.current.length > 100) history.current.shift();
+    future.current = [];
+    setHistVersion((v) => v + 1);
+  }, []);
+
+  const undo = useCallback(() => {
+    const prev = history.current.pop();
+    if (!prev) return;
+    future.current.push({ s: strokesRef.current, t: textsRef.current });
+    setStrokes(prev.s);
+    setTexts(prev.t);
+    setHistVersion((v) => v + 1);
+  }, []);
+
+  const redo = useCallback(() => {
+    const next = future.current.pop();
+    if (!next) return;
+    history.current.push({ s: strokesRef.current, t: textsRef.current });
+    setStrokes(next.s);
+    setTexts(next.t);
+    setHistVersion((v) => v + 1);
+  }, []);
+
   const convert = useCallback(async () => {
     const ids = [...pending.current];
     pending.current = [];
@@ -107,24 +140,28 @@ export function Whiteboard() {
       const r = await recognize({ data: { image: off.toDataURL("image/png") } });
       if (r.error) setMsg(r.error);
       if (r.text) {
+        pushHistory();
         setStrokes((ss) => ss.filter((s) => !ids.includes(s.id)));
         const fs = Math.max(16, Math.min(64, (maxY - minY) * 0.75));
         setTexts((t) => [...t, { id: uid++, x: minX, y: minY + (maxY - minY) / 2 - fs * 0.7, text: r.text, size: fs, color: group[0]!.color, auto: true }]);
       }
     } catch { setMsg("Couldn't read that handwriting."); }
     finally { setBusy((b) => b - 1); }
-  }, [recognize]);
-
-  const strokesRef = useRef(strokes);
-  strokesRef.current = strokes;
+  }, [recognize, pushHistory]);
 
   const pos = (e: React.PointerEvent): Pt => {
     const r = wrap.current!.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   };
 
+  const erasedThisStroke = useRef(false);
+
   const eraseTextAt = (point: Pt) => {
     const radius = Math.max(18, size * 3);
+    if (textsRef.current.length && !erasedThisStroke.current) {
+      erasedThisStroke.current = true;
+      pushHistory();
+    }
     setTexts((items) => items.filter((item) => {
       const width = Math.max(40, item.text.length * item.size * 0.58);
       const height = item.size * 1.4;
@@ -145,6 +182,7 @@ export function Whiteboard() {
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     if (timer.current) clearTimeout(timer.current);
     const point = pos(e);
+    erasedThisStroke.current = false;
     drawing.current = { id: uid++, pts: [point], color: ink, size, erase: tool === "eraser" };
     if (tool === "eraser") eraseTextAt(point);
     redraw();
@@ -163,6 +201,7 @@ export function Whiteboard() {
     const s = drawing.current;
     if (!s) return;
     drawing.current = null;
+    pushHistory();
     setStrokes((ss) => [...ss, s]);
     if (auto && !s.erase) {
       pending.current.push(s.id);
@@ -184,10 +223,6 @@ export function Whiteboard() {
     setTool("select");
   };
 
-  const undo = () => {
-    const lastS = strokes[strokes.length - 1]?.id ?? 0, lastT = texts[texts.length - 1]?.id ?? 0;
-    if (lastS > lastT) setStrokes((s) => s.slice(0, -1)); else setTexts((t) => t.slice(0, -1));
-  };
 
   const toolBtn = (t: Tool, Icon: typeof Pen, label: string) => (
     <button
@@ -292,8 +327,9 @@ export function Whiteboard() {
           {toolBtn("text", Type, "Text box")}
           {toolBtn("select", MousePointer2, "Move / edit text")}
           <div className="my-2 h-px w-8 bg-border" />
-          <button onClick={undo} title="Undo" aria-label="Undo" className="flex h-10 w-10 items-center justify-center rounded-lg hover:bg-accent"><Undo2 className="h-5 w-5" /></button>
-          <button onClick={() => { setStrokes([]); setTexts([]); }} title="Clear board" aria-label="Clear board" className="flex h-10 w-10 items-center justify-center rounded-lg text-destructive hover:bg-accent"><Trash2 className="h-5 w-5" /></button>
+          <button onClick={undo} disabled={histVersion < 0 || !history.current.length} title="Undo — bring back what you deleted" aria-label="Undo — bring back what you deleted" className="flex h-10 w-10 items-center justify-center rounded-lg hover:bg-accent disabled:opacity-40 disabled:hover:bg-transparent"><Undo2 className="h-5 w-5" /></button>
+          <button onClick={redo} disabled={histVersion < 0 || !future.current.length} title="Redo" aria-label="Redo" className="flex h-10 w-10 items-center justify-center rounded-lg hover:bg-accent disabled:opacity-40 disabled:hover:bg-transparent"><Redo2 className="h-5 w-5" /></button>
+          <button onClick={() => { pushHistory(); setStrokes([]); setTexts([]); }} title="Clear board" aria-label="Clear board" className="flex h-10 w-10 items-center justify-center rounded-lg text-destructive hover:bg-accent"><Trash2 className="h-5 w-5" /></button>
         </aside>
 
         {/* Working area */}
@@ -306,8 +342,8 @@ export function Whiteboard() {
           />
           {texts.map((t) => (
             <TextBox key={t.id} item={t} interactive={tool === "select"} autoFocus={focusId.current === t.id}
-              onChange={(patch) => setTexts((arr) => arr.map((x) => (x.id === t.id ? { ...x, ...patch } : x)))}
-              onDelete={() => setTexts((arr) => arr.filter((x) => x.id !== t.id))} />
+              onChange={(patch) => { if (patch.text !== undefined) pushHistory(); setTexts((arr) => arr.map((x) => (x.id === t.id ? { ...x, ...patch } : x))); }}
+              onDelete={() => { pushHistory(); setTexts((arr) => arr.filter((x) => x.id !== t.id)); }} />
           ))}
           {msg && (
             <button onClick={() => setMsg(null)} className="absolute bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-full bg-foreground px-4 py-2 text-sm text-background shadow-lg">{msg}</button>
